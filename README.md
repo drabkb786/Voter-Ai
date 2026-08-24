@@ -1,29 +1,36 @@
 # Voter-Ai
 
-A modern student election voting platform designed around verified student access, configurable CR/GR elections, one-time voting, privacy-preserving ballot storage, CSV roster import, admin controls, and result publishing.
+VoterAI is a modern student-election platform prototype for verified access, configurable CR/GR candidate rooms, one-time voting, privacy-aware ballot architecture, CSV roster management, and controlled result publishing.
 
-## Product goals
+## Redesigned experience
 
-- Verify voters by exact Roll Number + CNIC match from the imported student roster.
-- Allow admins to enable/disable voting eligibility per student.
-- Configure CR and GR candidate pools separately.
-- Allow exactly one CR vote and one GR vote per eligible voter.
-- Prevent vote changes after submission.
-- Keep voter identity separate from ballot choices in the application architecture.
-- Support scheduled elections and automatic opening/closing based on configured times.
-- Allow admins to review participation metrics without exposing voter choice mappings.
-- Publish final results only when the admin explicitly releases them.
+The current UI has been rebuilt around a calmer, premium light interface:
 
-## Suggested stack for Lovable
+- Public voter landing page with a clear election CTA and trust signals
+- Roll Number + CNIC verification modal with exact-record matching in the prototype
+- Dedicated two-column CR/GR ballot with candidate cards and review-before-submit
+- Confirmation modal and completed-ballot receipt state
+- Responsive mobile ballot experience
+- Full administrator control center with navigation for Overview, Students, Create Room, Candidates, Results and Audit Log
+- CSV roster upload surface
+- Student eligibility toggles and search
+- Election configuration form with timing and voting rules
+- Participation/turnout dashboard and result publishing surface
+- Accessible labels, semantic sections, keyboard-friendly buttons and responsive breakpoints
 
-- React + TypeScript
-- Vite
-- Tailwind CSS
-- shadcn/ui
+## Lovable handoff
+
+See `docs/lovable-prompt.md` for the production implementation brief. It describes the Supabase data model, server-side authorization, CSV validation, election lifecycle, candidate management, privacy boundary, audit logging, and deployment requirements.
+
+## Important production boundary
+
+The current repository is a UI/interaction prototype. A real election must not rely on client-side state for security. Production deployment should enforce voter eligibility, one-time voting, election timing, role permissions, and ballot privacy on the server/database using authenticated APIs, database constraints/RLS, TLS, secure secrets, and audited administrative actions.
+
+## Suggested stack
+
+- React + TypeScript + Vite (current prototype)
+- Tailwind CSS + shadcn/ui for a Lovable production conversion
 - Supabase Auth + Postgres + Storage
-- Papa Parse for CSV parsing
-- Recharts for admin analytics
-
-## Important production note
-
-This repository contains the product foundation and UI direction. A production election should use a real backend with server-side authorization, database constraints, audit logging, TLS, secure secret management, and a privacy-preserving ballot model. Do not rely on client-side checks for eligibility or one-vote enforcement.
+- Papa Parse or equivalent for CSV parsing
+- Recharts or an equivalent accessible chart library
+- Vercel for the web application
