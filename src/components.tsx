@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 import { Check, ChevronRight, CircleHelp, Clock3, FileSpreadsheet, LockKeyhole, Search, ShieldCheck, Vote, X } from 'lucide-react';
 import type { Candidate, Student } from './data';
 
@@ -11,12 +11,12 @@ export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold ring-1 ${tones[tone]}`}>{children}</span>;
 }
 
-export function Button({ children, variant = 'primary', className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
+export function Button({ children, variant = 'primary', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
   const styles = { primary: 'bg-brand text-white shadow-lg shadow-blue-600/15 hover:bg-brandDark', secondary: 'bg-white text-ink ring-1 ring-line hover:bg-slate-50', ghost: 'text-muted hover:bg-slate-100' };
   return <button className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]} ${className}`} {...props}>{children}</button>;
 }
 
-export function Field({ label, hint, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
+export function Field({ label, hint, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return <label className="grid gap-2 text-sm font-semibold text-ink"><span>{label}</span><input className="h-12 rounded-xl bg-white px-4 text-sm font-medium text-ink ring-1 ring-line outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-brand" {...props}/>{hint && <span className="text-xs font-normal text-muted">{hint}</span>}</label>;
 }
 
@@ -51,7 +51,6 @@ export function StatCard({ icon, label, value, detail }: { icon: ReactNode; labe
 export function PageShell({ children, title, eyebrow }: { children: ReactNode; title: string; eyebrow: string }) { return <main className="min-h-[calc(100vh-72px)] bg-canvas"><div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><div className="mb-8"><span className="text-[11px] font-black uppercase tracking-[.18em] text-brand">{eyebrow}</span><h1 className="mt-2 text-2xl font-black tracking-tight text-ink sm:text-3xl">{title}</h1></div>{children}</div></main>; }
 
 export function Footer() { return <footer className="border-t border-line bg-white"><div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-7 text-xs text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><Logo compact/><span className="flex items-center gap-1"><LockKeyhole size={13}/> Privacy-first student voting</span></div></footer>; }
-
 export function LivePill() { return <Badge tone="green"><span className="size-1.5 rounded-full bg-emerald-500"/> Election live</Badge>; }
 export function Countdown() { return <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-muted"><Clock3 size={13}/> 03h 42m left</span>; }
 export function FileDrop({ onChange }: { onChange: (file: File) => void }) { return <label className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center hover:border-brand hover:bg-blue-50/40"><input type="file" accept=".csv,text/csv" className="sr-only" onChange={e => e.target.files?.[0] && onChange(e.target.files[0])}/><span className="grid size-11 place-items-center rounded-xl bg-white text-brand shadow-sm"><FileSpreadsheet size={20}/></span><strong className="mt-3 text-sm font-bold text-ink">Import student roster</strong><span className="mt-1 text-xs text-muted">CSV only · validated server-side</span></label>; }
