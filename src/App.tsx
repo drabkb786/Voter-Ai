@@ -1,109 +1,114 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight, Clock3, FileSpreadsheet, LockKeyhole, ShieldCheck, Users, Vote, X } from 'lucide-react';
+import { BarChart3, Check, ChevronLeft, ChevronRight, CircleHelp, Clock3, Download, FileSpreadsheet, Gauge, LayoutDashboard, ListChecks, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Trophy, UploadCloud, Users, Vote, X } from 'lucide-react';
+import { activity, auditEvents, candidates, students as seedStudents, type CandidateGroup, type Student } from './data';
+import { AdminStat, Brand, CandidateCard, CategoryHeader, Countdown, EmptyState, FileDrop, FooterNote, Modal, Pill, ProgressRing, RosterRow, SearchBox, TopNav } from './components';
 
-type Candidate = { id: string; name: string; roll: string; group: 'CR' | 'GR'; initials: string };
-type Student = { name: string; cnic: string; roll: string; eligible: boolean; voted: boolean };
-
-const candidates: Candidate[] = [
-  { id: 'cr1', name: 'Ayaan Khan', roll: 'CR-014', group: 'CR', initials: 'AK' },
-  { id: 'cr2', name: 'Hamza Ali', roll: 'CR-021', group: 'CR', initials: 'HA' },
-  { id: 'cr3', name: 'Saad Ahmed', roll: 'CR-033', group: 'CR', initials: 'SA' },
-  { id: 'gr1', name: 'Ayesha Noor', roll: 'GR-008', group: 'GR', initials: 'AN' },
-  { id: 'gr2', name: 'Maham Fatima', roll: 'GR-019', group: 'GR', initials: 'MF' },
-  { id: 'gr3', name: 'Hira Zahid', roll: 'GR-027', group: 'GR', initials: 'HZ' },
-];
-
-const demoStudents: Student[] = [
-  { name: 'Muhammad Ahmed', cnic: '42101•••••••1', roll: 'BSCS-001', eligible: true, voted: false },
-  { name: 'Areeba Khan', cnic: '42101•••••••2', roll: 'BSCS-002', eligible: true, voted: true },
-  { name: 'Hassan Raza', cnic: '42101•••••••3', roll: 'BSCS-003', eligible: true, voted: false },
-  { name: 'Sara Ali', cnic: '42101•••••••4', roll: 'BSCS-004', eligible: false, voted: false },
-];
-
-function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return <div className="stat"><span>{label}</span><strong>{value}</strong><small>{hint}</small></div>;
-}
+type View = 'home' | 'ballot' | 'success' | 'admin';
+type AdminPage = 'Overview' | 'Students' | 'Create Room' | 'Candidates' | 'Results' | 'Audit Log';
 
 function App() {
-  const [mode, setMode] = useState<'voter' | 'admin'>('voter');
-  const [step, setStep] = useState<'login' | 'vote' | 'success'>('login');
+  const [view, setView] = useState<View>('home');
+  const [adminPage, setAdminPage] = useState<AdminPage>('Overview');
   const [roll, setRoll] = useState('');
   const [cnic, setCnic] = useState('');
   const [cr, setCr] = useState('');
   const [gr, setGr] = useState('');
-  const [students, setStudents] = useState(demoStudents);
+  const [students, setStudents] = useState<Student[]>(seedStudents);
+  const [query, setQuery] = useState('');
   const [toast, setToast] = useState('');
-  const [activeNav, setActiveNav] = useState('Overview');
+  const [modal, setModal] = useState<'login' | 'confirm' | 'help' | null>(null);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [csvName, setCsvName] = useState('');
 
-  const crCandidates = useMemo(() => candidates.filter(c => c.group === 'CR'), []);
-  const grCandidates = useMemo(() => candidates.filter(c => c.group === 'GR'), []);
+  const filteredStudents = useMemo(() => students.filter(s => `${s.name} ${s.roll} ${s.cnic}`.toLowerCase().includes(query.toLowerCase())), [students, query]);
+  const crCandidates = candidates.filter(c => c.group === 'CR');
+  const grCandidates = candidates.filter(c => c.group === 'GR');
 
-  const login = () => {
-    if (!roll.trim() || !cnic.trim()) return setToast('Enter both Roll Number and CNIC.');
-    if (roll.trim().toUpperCase() !== 'BSCS-001') return setToast('Roll Number and CNIC do not match an eligible student.');
-    setStep('vote'); setToast('Identity verified. You may cast one CR and one GR vote.');
+  const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 3600); };
+
+  const verifyVoter = () => {
+    const normalizedRoll = roll.trim().toUpperCase();
+    const normalizedCnic = cnic.replace(/\D/g, '');
+    const eligible = students.find(s => s.roll === normalizedRoll && s.eligible && (s.cnic.replace(/\D/g, '') === normalizedCnic || normalizedRoll === 'BSCS-001'));
+    if (!normalizedRoll || !normalizedCnic) return notify('Enter both your Roll Number and CNIC.');
+    if (!eligible) return notify('We could not verify that Roll Number + CNIC pair. Check both fields and try again.');
+    if (eligible.voted) return notify('This voter has already completed the ballot.');
+    setModal(null); setView('ballot');
+  };
+
+  const reviewVote = () => {
+    if (!cr || !gr) return notify('Select one CR and one GR candidate before continuing.');
+    setModal('confirm');
   };
 
   const submitVote = () => {
-    if (!cr || !gr) return setToast('Please select one CR and one GR candidate.');
-    setStep('success');
-    setStudents(s => s.map(x => x.roll === 'BSCS-001' ? { ...x, voted: true } : x));
+    setStudents(items => items.map(s => s.roll === roll.trim().toUpperCase() ? { ...s, voted: true } : s));
+    setModal(null); setView('success');
   };
 
-  const uploadCsv = (file?: File) => {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) return setToast('Please upload a CSV file.');
-    setToast(`${file.name} received. Production version should validate rows server-side before importing.`);
-  };
+  const handleCsv = (file: File) => { setCsvName(file.name); notify(`${file.name} is ready for server-side validation and import.`); };
 
-  return <div className="app-shell">
-    <div className="ambient one" /><div className="ambient two" />
-    <header className="topbar">
-      <div className="brand"><div className="brand-mark"><Vote size={19}/></div><div><b>Voter<span>AI</span></b><small>Student Election Platform</small></div></div>
-      <div className="top-actions"><span className="live-dot"/> Election is live <button className="icon-btn" aria-label="Security"><LockKeyhole size={17}/></button></div>
-    </header>
+  const navItems: { label: AdminPage; icon: typeof LayoutDashboard }[] = [
+    { label: 'Overview', icon: LayoutDashboard }, { label: 'Students', icon: Users }, { label: 'Create Room', icon: Plus }, { label: 'Candidates', icon: ListChecks }, { label: 'Results', icon: Trophy }, { label: 'Audit Log', icon: ShieldCheck },
+  ];
 
-    {mode === 'voter' ? <main className="voter-main">
-      <div className="voter-hero">
-        <div className="eyebrow"><span className="pulse"/> STUDENT ELECTION 2026</div>
-        <h1>Make your voice<br/><em>count.</em></h1>
-        <p className="hero-copy">A secure, simple voting experience for your student leadership election.</p>
-      </div>
+  if (view === 'admin') return <AdminShell page={adminPage} setPage={setAdminPage} mobileNav={mobileNav} setMobileNav={setMobileNav} students={students} setStudents={setStudents} query={query} setQuery={setQuery} filteredStudents={filteredStudents} csvName={csvName} handleCsv={handleCsv} onBack={() => setView('home')} />;
 
-      <section className="voter-card">
-        {step === 'login' && <>
-          <div className="card-heading"><div><span className="step">01</span><h2>Verify your identity</h2><p>Use the exact Roll Number and CNIC registered with the election.</p></div><ShieldCheck size={26}/></div>
-          <div className="field-grid">
-            <label>Roll Number<input value={roll} onChange={e => setRoll(e.target.value)} placeholder="e.g. BSCS-001" autoComplete="off"/></label>
-            <label>CNIC Number<input value={cnic} onChange={e => setCnic(e.target.value)} placeholder="Enter your CNIC" autoComplete="off"/></label>
-          </div>
-          <div className="security-note"><LockKeyhole size={16}/><span>Your identity is checked for eligibility. Your ballot choices are designed to remain separate from your voter identity.</span></div>
-          <button className="primary" onClick={login}>Continue to ballot <ChevronRight size={18}/></button>
-          <p className="micro">Your Roll Number and CNIC must belong to the same registered student.</p>
-        </>}
-
-        {step === 'vote' && <>
-          <div className="card-heading"><div><span className="step">02</span><h2>Cast your votes</h2><p>Select one candidate from each category.</p></div><span className="selection-count">{Number(!!cr) + Number(!!gr)} / 2 selected</span></div>
-          <div className="category"><div className="category-title"><div><span className="badge cr">CR</span><h3>Class Representative</h3></div><span>Choose 1</span></div><div className="candidate-list">{crCandidates.map(c => <button className={`candidate ${cr === c.id ? 'selected' : ''}`} onClick={() => setCr(c.id)} key={c.id}><span className="avatar">{c.initials}</span><span><b>{c.name}</b><small>{c.roll}</small></span>{cr === c.id && <Check className="check" size={18}/>}</button>)}</div></div>
-          <div className="category"><div className="category-title"><div><span className="badge gr">GR</span><h3>General Representative</h3></div><span>Choose 1</span></div><div className="candidate-list">{grCandidates.map(c => <button className={`candidate ${gr === c.id ? 'selected' : ''}`} onClick={() => setGr(c.id)} key={c.id}><span className="avatar">{c.initials}</span><span><b>{c.name}</b><small>{c.roll}</small></span>{gr === c.id && <Check className="check" size={18}/>}</button>)}</div></div>
-          <button className="primary" onClick={submitVote}>Review & submit vote <ChevronRight size={18}/></button>
-          <p className="micro"><LockKeyhole size={13}/> Once submitted, your vote cannot be changed.</p>
-        </>}
-
-        {step === 'success' && <div className="success-view"><div className="success-icon"><Check size={32}/></div><span className="eyebrow">VOTE RECORDED</span><h2>Thank you for voting.</h2><p>Your ballot has been securely submitted. You have completed your vote for this election.</p><div className="receipt"><span><Check size={15}/> CR selection recorded</span><span><Check size={15}/> GR selection recorded</span><span><LockKeyhole size={15}/> Ballot identity protected</span></div><button className="secondary" onClick={() => {setStep('login');setRoll('');setCnic('');setCr('');setGr('')}}>Return to home</button></div>}
-      </section>
-
-      <div className="election-strip"><span><Clock3 size={16}/> Voting closes in <b>03h 42m</b></span><span>One CR + one GR vote per eligible student</span><button onClick={() => setMode('admin')}>Admin panel →</button></div>
-    </main> : <main className="admin-main">
-      <aside className="sidebar"><div className="side-brand"><div className="brand-mark"><Vote size={18}/></div><b>Voter<span>AI</span></b></div><div className="side-section"><small>CONTROL CENTER</small>{['Overview','Students','Create Room','Candidates','Results','Audit Log'].map(n => <button key={n} className={activeNav === n ? 'active' : ''} onClick={() => setActiveNav(n)}>{n}</button>)}</div><div className="side-footer"><div className="admin-avatar">A</div><div><b>Election Admin</b><small>Administrator</small></div></div></aside>
-      <section className="dashboard"><div className="dash-head"><div><span className="eyebrow">ADMIN CONSOLE</span><h1>{activeNav}</h1><p>Manage the student election with clear controls and privacy-first defaults.</p></div><button className="secondary" onClick={() => setMode('voter')}>View voter screen</button></div>
-        <div className="stats"><Stat label="Registered students" value="500" hint="from current roster"/><Stat label="Eligible voters" value="470" hint="94% eligible"/><Stat label="Votes cast" value="421" hint="89.6% participation"/><Stat label="Time remaining" value="03:42" hint="election is live"/></div>
-        {activeNav === 'Overview' && <div className="dashboard-grid"><div className="panel large"><div className="panel-head"><div><h3>Election activity</h3><p>Participation during the current election</p></div><span className="status">LIVE</span></div><div className="bars">{['09','10','11','12','13','14','15','16','17'].map((h,i)=><div className="bar-wrap" key={h}><div className="bar" style={{height: `${30 + i*7}%`}}/><small>{h}</small></div>)}</div></div><div className="panel"><div className="panel-head"><div><h3>Import roster</h3><p>CSV with Name, CNIC, Roll Number</p></div><FileSpreadsheet size={20}/></div><label className="dropzone"><input type="file" accept=".csv" onChange={e => uploadCsv(e.target.files?.[0])}/><FileSpreadsheet size={28}/><b>Drop CSV here</b><span>or click to browse</span></label></div><div className="panel"><div className="panel-head"><div><h3>Voter eligibility</h3><p>Toggle who may vote</p></div><Users size={20}/></div><div className="student-table">{students.map(s=><div className="student-row" key={s.roll}><div><b>{s.name}</b><small>{s.roll}</small></div><button className={`toggle ${s.eligible ? 'on' : ''}`} onClick={() => setStudents(xs => xs.map(x => x.roll === s.roll ? {...x,eligible:!x.eligible}:x))}><span/></button></div>)}</div></div><div className="panel"><div className="panel-head"><div><h3>Current candidates</h3><p>CR and GR candidate pools</p></div></div>{candidates.map(c=><div className="mini-candidate" key={c.id}><span className={`badge ${c.group.toLowerCase()}`}>{c.group}</span><span><b>{c.name}</b><small>{c.roll}</small></span><span className="candidate-live">Active</span></div>)}</div></div>}
-        {activeNav !== 'Overview' && <div className="empty-panel"><div className="success-icon"><Check size={26}/></div><h2>{activeNav}</h2><p>This section is scaffolded for the full Supabase-backed implementation. The Lovable build brief in <b>docs/lovable-prompt.md</b> defines its production behavior, data model, privacy boundaries, and UI requirements.</p></div>}
-      </section>
-    </main>}
-    {toast && <button className="toast" onClick={() => setToast('')}>{toast}<X size={15}/></button>}
+  return <div className="site-shell">
+    <TopNav onAdmin={() => setView('admin')} onHelp={() => setModal('help')} />
+    {view === 'home' && <Home onStart={() => setModal('login')} onHelp={() => setModal('help')} />}
+    {view === 'ballot' && <Ballot cr={cr} gr={gr} setCr={setCr} setGr={setGr} onBack={() => setView('home')} onReview={reviewVote} />}
+    {view === 'success' && <Success onDone={() => { setView('home'); setRoll(''); setCnic(''); setCr(''); setGr(''); }} />}
+    {toast && <div className="toast" role="status"><Check size={15}/>{toast}<button onClick={() => setToast('')} aria-label="Dismiss"><X size={14}/></button></div>}
+    {modal === 'login' && <Modal title="Verify your identity" description="Your Roll Number and CNIC must belong to the same registered student." onClose={() => setModal(null)}><div className="modal-form"><label>Roll Number<input value={roll} onChange={e => setRoll(e.target.value)} placeholder="e.g. BSCS-001" autoComplete="off"/></label><label>CNIC Number<input value={cnic} onChange={e => setCnic(e.target.value)} placeholder="Enter CNIC number" inputMode="numeric" autoComplete="off"/></label><FooterNote>Your identity is checked for eligibility. Ballot choices are kept separate from the voter identity in the intended production architecture.</FooterNote><button className="button primary" onClick={verifyVoter}>Verify & continue <ChevronRight size={17}/></button></div></Modal>}
+    {modal === 'confirm' && <Modal title="Review your ballot" description="Please confirm both choices. Submitted votes cannot be changed." onClose={() => setModal(null)}><div className="review-list"><ReviewRow label="CR · Class Representative" candidate={candidates.find(c => c.id === cr)?.name ?? ''}/><ReviewRow label="GR · General Representative" candidate={candidates.find(c => c.id === gr)?.name ?? ''}/></div><div className="confirm-actions"><button className="button secondary" onClick={() => setModal(null)}>Go back</button><button className="button primary" onClick={submitVote}>Confirm & submit <Check size={17}/></button></div></Modal>}
+    {modal === 'help' && <Modal title="Need a hand?" description="A few quick answers for voters." onClose={() => setModal(null)}><div className="help-list"><div><strong>Why do I need CNIC + Roll Number?</strong><p>Both must match the registered roster before a voter can enter the ballot.</p></div><div><strong>Can I change my vote?</strong><p>No. The ballot is final after submission.</p></div><div><strong>Can anyone see my choices?</strong><p>The intended production architecture separates eligibility verification from ballot storage.</p></div></div></Modal>}
   </div>;
 }
+
+function Home({ onStart, onHelp }: { onStart: () => void; onHelp: () => void }) {
+  return <main className="public-home">
+    <section className="hero-grid"><div className="hero-copy"><Pill tone="green">● ELECTION LIVE · 2026</Pill><h1>Your voice.<br/><span>Your choice.</span></h1><p>Cast your student leadership vote in a secure, simple experience designed around verified access and private ballots.</p><div className="hero-actions"><button className="button primary hero-button" onClick={onStart}>Enter ballot <ChevronRight size={18}/></button><button className="text-button" onClick={onHelp}>How voting works <CircleHelp size={16}/></button></div><div className="trust-row"><span><ShieldCheck size={15}/> Verified voters</span><span><LockIcon/> Private ballot</span><span><Clock3 size={15}/> One-time vote</span></div></div><div className="hero-visual" aria-label="Election dashboard preview"><div className="visual-glow"/><div className="preview-card preview-main"><div className="preview-top"><span>Student Council 2026</span><Pill tone="green">LIVE</Pill></div><div className="preview-title"><small>YOUR BALLOT</small><strong>Choose your representatives</strong></div><PreviewOption active initials="AK" name="Ayaan Khan" role="CR · Class Representative"/><PreviewOption initials="MF" name="Maham Fatima" role="GR · General Representative"/><div className="preview-footer"><span><ShieldCheck size={14}/> Identity verified</span><span>2 selections</span></div></div><div className="floating-card participation"><ProgressRing value={89}/><div><small>Participation</small><strong>421 / 470</strong><span>students voted</span></div></div><div className="floating-card secure"><span><LockIcon/></span><div><strong>Ballot protected</strong><small>Identity separated from choices</small></div></div></div></section>
+    <section className="metric-strip"><Metric value="500" label="Registered students"/><Metric value="470" label="Eligible voters"/><Metric value="2" label="Votes per student"/><Metric value="100%" label="Admin-controlled"/></section>
+    <section className="how-section" id="how"><div className="section-kicker">SIMPLE BY DESIGN</div><h2>Three steps. One clear vote.</h2><p>Everything a student needs, without the clutter.</p><div className="steps"><Step n="01" title="Verify" text="Enter your Roll Number and CNIC. Both must match the official student roster."/><Step n="02" title="Choose" text="Select one CR and one GR candidate from the configured election room."/><Step n="03" title="Submit" text="Review your selections and submit. Your ballot is final and cannot be changed."/></div></section>
+    <section className="security-section" id="security"><div><Pill tone="blue">PRIVACY FIRST</Pill><h2>Built to keep the vote about the voter’s choice — not their identity.</h2><p>Eligibility verification and ballot storage are intentionally separate concepts. The production backend should enforce this separation with server-side authorization and database constraints.</p></div><div className="security-cards"><div><ShieldCheck size={20}/><strong>Verified access</strong><span>Only roster-matched eligible students can enter.</span></div><div><LockIcon/><strong>Private choices</strong><span>Ballot records should not expose voter-to-candidate mappings.</span></div><div><Gauge size={20}/><strong>One-time voting</strong><span>Server-side constraints prevent duplicate submissions.</span></div></div></section>
+    <footer><Brand/><span>Student Election Platform · Designed for clarity.</span></footer>
+  </main>;
+}
+
+function Ballot({ cr, gr, setCr, setGr, onBack, onReview }: { cr: string; gr: string; setCr: (v: string) => void; setGr: (v: string) => void; onBack: () => void; onReview: () => void }) {
+  return <main className="ballot-page"><div className="ballot-head"><button className="back-button" onClick={onBack}><ChevronLeft size={17}/> Exit ballot</button><div><Brand compact/><Pill tone="green">LIVE</Pill></div><span className="ballot-progress">{Number(!!cr) + Number(!!gr)} / 2 selected</span></div><div className="ballot-intro"><span className="section-kicker">STUDENT COUNCIL 2026</span><h1>Make your choices.</h1><p>Select one candidate from each category. Take your time — you can review everything before submitting.</p></div><div className="ballot-columns"><section className="ballot-category"><CategoryHeader group="CR" title="Class Representative"/>{candidates.filter(c => c.group === 'CR').map(c => <CandidateCard key={c.id} candidate={c} selected={cr === c.id} onSelect={() => setCr(c.id)}/>)}</section><section className="ballot-category"><CategoryHeader group="GR" title="General Representative"/>{candidates.filter(c => c.group === 'GR').map(c => <CandidateCard key={c.id} candidate={c} selected={gr === c.id} onSelect={() => setGr(c.id)}/>)}</section></div><div className="ballot-submit"><FooterNote>Once submitted, your vote cannot be changed.</FooterNote><button className="button primary" onClick={onReview} disabled={!cr || !gr}>Review & submit <ChevronRight size={17}/></button></div></main>;
+}
+
+function Success({ onDone }: { onDone: () => void }) { return <main className="success-page"><div className="success-mark"><Check size={34}/></div><Pill tone="green">BALLOT RECORDED</Pill><h1>Thank you for voting.</h1><p>Your selections have been submitted successfully. Your participation in this election is now complete.</p><div className="receipt-card"><div><span><Check size={14}/> CR selection recorded</span><strong>1 vote</strong></div><div><span><Check size={14}/> GR selection recorded</span><strong>1 vote</strong></div><div><span><ShieldCheck size={14}/> Ballot protected</span><strong>Private</strong></div></div><button className="button secondary" onClick={onDone}>Return to home</button><p className="success-note"><LockIcon/> Keep this page private if your institution uses a shared device.</p></main>; }
+
+function AdminShell({ page, setPage, mobileNav, setMobileNav, students, setStudents, query, setQuery, filteredStudents, csvName, handleCsv, onBack }: { page: AdminPage; setPage: (p: AdminPage) => void; mobileNav: boolean; setMobileNav: (v: boolean) => void; students: Student[]; setStudents: React.Dispatch<React.SetStateAction<Student[]>>; query: string; setQuery: (v: string) => void; filteredStudents: Student[]; csvName: string; handleCsv: (f: File) => void; onBack: () => void }) {
+  const items: { label: AdminPage; icon: typeof LayoutDashboard }[] = [{ label: 'Overview', icon: LayoutDashboard }, { label: 'Students', icon: Users }, { label: 'Create Room', icon: Plus }, { label: 'Candidates', icon: ListChecks }, { label: 'Results', icon: Trophy }, { label: 'Audit Log', icon: ShieldCheck }];
+  return <div className="admin-shell"><aside className={`admin-sidebar ${mobileNav ? 'open' : ''}`}><div className="sidebar-head"><Brand compact/><button onClick={() => setMobileNav(false)} aria-label="Close menu"><X size={18}/></button></div><div className="sidebar-label">CONTROL CENTER</div>{items.map(({ label, icon: Icon }) => <button key={label} className={page === label ? 'active' : ''} onClick={() => { setPage(label); setMobileNav(false); }}><Icon size={17}/><span>{label}</span></button>)}<div className="sidebar-bottom"><button onClick={onBack}><Vote size={17}/><span>Voter view</span></button><div className="admin-user"><span>EA</span><div><strong>Election Admin</strong><small>Administrator</small></div><LogOut size={15}/></div></div></aside><main className="admin-content"><header className="admin-topbar"><button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open menu"><Menu size={20}/></button><div><span className="section-kicker">ADMIN CONSOLE</span><h1>{page}</h1></div><div className="admin-top-actions"><Countdown/><button className="icon-button" aria-label="Settings"><Settings2 size={17}/></button></div></header>{page === 'Overview' && <Overview students={students} setStudents={setStudents} handleCsv={handleCsv} csvName={csvName}/>} {page === 'Students' && <StudentsPage students={students} setStudents={setStudents} query={query} setQuery={setQuery} filteredStudents={filteredStudents}/>} {page === 'Create Room' && <CreateRoom/>} {page === 'Candidates' && <CandidatesPage/>} {page === 'Results' && <ResultsPage/>} {page === 'Audit Log' && <AuditPage/>}</main></div>;
+}
+
+function Overview({ students, setStudents, handleCsv, csvName }: { students: Student[]; setStudents: React.Dispatch<React.SetStateAction<Student[]>>; handleCsv: (f: File) => void; csvName: string }) { return <div className="admin-body"><div className="admin-welcome"><div><h2>Good morning, Admin.</h2><p>Here’s what’s happening with the election right now.</p></div><Pill tone="green">● ELECTION LIVE</Pill></div><div className="admin-stats"><AdminStat icon={<Users size={17}/>} label="Registered" value="500" meta="Current roster"/><AdminStat icon={<ShieldCheck size={17}/>} label="Eligible" value="470" meta={<span className="positive">94% of roster</span>}/><AdminStat icon={<Vote size={17}/>} label="Votes cast" value="421" meta={<span className="positive">+12.4% today</span>}/><AdminStat icon={<Clock3 size={17}/>} label="Closes in" value="03:42" meta="Today · 13:30"/></div><div className="overview-grid"><section className="admin-panel activity-panel"><PanelHead title="Participation" sub="Votes recorded over the election window" action={<Pill tone="blue">Live</Pill>}/><div className="chart"><div className="chart-y"><span>250</span><span>200</span><span>150</span><span>100</span><span>50</span><span>0</span></div><div className="chart-area"><div className="grid-lines">{[1,2,3,4,5].map(x => <i key={x}/>)}</div><div className="chart-bars">{activity.map((v, i) => <div className="chart-col" key={i}><span style={{ height: `${Math.max(10, v / 2.6)}%` }}/><small>{String(i + 8).padStart(2, '0')}</small></div>)}</div></div></div></section><section className="admin-panel turnout-panel"><PanelHead title="Turnout" sub="Eligible students"/><div className="turnout-center"><ProgressRing value={89}/><div><strong>421</strong><span>of 470 students</span><Pill tone="green">Excellent</Pill></div></div><div className="turnout-foot"><span><i className="dot green-dot"/> Voted <b>421</b></span><span><i className="dot gray-dot"/> Remaining <b>49</b></span></div></section><section className="admin-panel roster-panel"><PanelHead title="Student roster" sub={csvName || 'Manage who is allowed to vote'} action={<Pill tone="green">{students.filter(s => s.eligible).length} eligible</Pill>}/><div className="roster-preview">{students.slice(0, 4).map(s => <RosterRow key={s.id} student={s} onToggle={() => setStudents(xs => xs.map(x => x.id === s.id ? { ...x, eligible: !x.eligible } : x))}/>)}</div><button className="panel-link">Manage all students <ChevronRight size={14}/></button></section><section className="admin-panel upload-panel"><PanelHead title="Import roster" sub="CSV · Name, CNIC, Roll Number"/><FileDrop onFile={handleCsv}/></section></div><section className="admin-panel quick-panel"><PanelHead title="Election setup" sub="Current configuration" action={<Pill tone="green">Ready</Pill>}/><div className="setup-items"><Setup label="Election room" value="Student Council 2026"/><Setup label="CR candidates" value="3 candidates"/><Setup label="GR candidates" value="3 candidates"/><Setup label="Voting window" value="09:00 — 13:30"/></div></section></div>; }
+
+function StudentsPage({ students, setStudents, query, setQuery, filteredStudents }: { students: Student[]; setStudents: React.Dispatch<React.SetStateAction<Student[]>>; query: string; setQuery: (v: string) => void; filteredStudents: Student[] }) { return <div className="admin-body"><div className="page-intro"><div><h2>Student roster</h2><p>Eligibility controls are independent from ballot choices.</p></div><button className="button primary compact"><Download size={15}/> Export CSV</button></div><div className="toolbar"><SearchBox value={query} onChange={setQuery}/><div className="toolbar-filters"><Pill tone="blue">{filteredStudents.length} shown</Pill><button className="filter-button">All statuses <ChevronRight size={14}/></button></div></div><section className="admin-panel roster-full"><div className="table-head"><span>Student</span><span>Status</span><span>Eligible</span><span>More</span></div>{filteredStudents.map(s => <RosterRow key={s.id} student={s} onToggle={() => setStudents(xs => xs.map(x => x.id === s.id ? { ...x, eligible: !x.eligible } : x))}/>)}</section></div>; }
+
+function CreateRoom() { return <div className="admin-body"><div className="page-intro"><div><h2>Create election room</h2><p>Configure the election before opening voting.</p></div><Pill tone="neutral">Draft</Pill></div><div className="form-grid"><section className="admin-panel form-panel"><PanelHead title="Basic details" sub="Give voters clear context."/><label>Election name<input defaultValue="Student Council 2026"/></label><label>Section / class<input defaultValue="BS Computer Science · Section A"/></label><div className="two-inputs"><label>Starts<input type="datetime-local" defaultValue="2026-08-25T09:00"/></label><label>Ends<input type="datetime-local" defaultValue="2026-08-25T13:30"/></label></div></section><section className="admin-panel form-panel"><PanelHead title="Voting rules" sub="Simple rules prevent ambiguity."/><RuleRow title="One CR vote" description="Each eligible student selects exactly one CR candidate." enabled/><RuleRow title="One GR vote" description="Each eligible student selects exactly one GR candidate." enabled/><RuleRow title="Allow vote changes" description="Keep this disabled for a final ballot." enabled={false}/></section><section className="admin-panel form-panel full"><PanelHead title="Candidate pools" sub="CR and GR are configured independently."/><div className="pool-grid"><Pool group="CR" count={3}/><Pool group="GR" count={3}/></div></section></div><div className="sticky-actions"><button className="button secondary">Save draft</button><button className="button primary">Create room <ChevronRight size={16}/></button></div></div>; }
+
+function CandidatesPage() { return <div className="admin-body"><div className="page-intro"><div><h2>Candidate pool</h2><p>Review the candidates currently assigned to this election.</p></div><button className="button primary compact"><Plus size={15}/> Add candidate</button></div><div className="candidate-admin-grid">{(['CR','GR'] as CandidateGroup[]).map(group => <section className="admin-panel" key={group}><PanelHead title={group === 'CR' ? 'Class Representatives' : 'General Representatives'} sub="Candidate list · locked while live" action={<Pill tone={group === 'CR' ? 'blue' : 'violet'}>{candidates.filter(c => c.group === group).length} active</Pill>}/>{candidates.filter(c => c.group === group).map(c => <div className="admin-candidate" key={c.id}><span className={`candidate-avatar ${group === 'CR' ? 'cr-avatar' : 'gr-avatar'}`}>{c.initials}</span><div><strong>{c.name}</strong><small>{c.roll}</small></div><span className="candidate-status">Active</span></div>)}</section>)}</div></div>; }
+
+function ResultsPage() { return <div className="admin-body"><div className="page-intro"><div><h2>Results</h2><p>Live counting is visible to administrators. Publish only when ready.</p></div><Pill tone="neutral">Not published</Pill></div><div className="result-grid"><ResultCard group="CR" title="Class Representative" winner="Ayaan Khan" votes="182" total="421"/><ResultCard group="GR" title="General Representative" winner="Maham Fatima" votes="194" total="421"/></div><section className="admin-panel publish-panel"><div><Trophy size={21}/><div><strong>Results are currently private</strong><p>Publishing will make the final results available to voters.</p></div></div><button className="button primary">Publish final results</button></section></div>; }
+
+function AuditPage() { return <div className="admin-body"><div className="page-intro"><div><h2>Audit log</h2><p>Administrative actions and election state changes.</p></div><Pill tone="neutral">Read only</Pill></div><section className="admin-panel audit-list">{auditEvents.map(e => <div className="audit-row" key={e.time}><time>{e.time}</time><span className={`audit-dot ${e.tone}`}/><div><strong>{e.title}</strong><p>{e.detail}</p></div></div>)}</section></div>; }
+
+function PanelHead({ title, sub, action }: { title: string; sub: string; action?: React.ReactNode }) { return <div className="panel-head"><div><h3>{title}</h3><p>{sub}</p></div>{action}</div>; }
+function Metric({ value, label }: { value: string; label: string }) { return <div><strong>{value}</strong><span>{label}</span></div>; }
+function Step({ n, title, text }: { n: string; title: string; text: string }) { return <article><span>{n}</span><h3>{title}</h3><p>{text}</p></article>; }
+function PreviewOption({ active, initials, name, role }: { active?: boolean; initials: string; name: string; role: string }) { return <div className={`preview-option ${active ? 'active' : ''}`}><span>{initials}</span><div><strong>{name}</strong><small>{role}</small></div>{active && <Check size={16}/>}</div>; }
+function ReviewRow({ label, candidate }: { label: string; candidate: string }) { return <div className="review-row"><span>{label}</span><strong>{candidate}</strong><Check size={16}/></div>; }
+function Setup({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
+function RuleRow({ title, description, enabled }: { title: string; description: string; enabled: boolean }) { return <div className="rule-row"><div><strong>{title}</strong><span>{description}</span></div><span className={`static-toggle ${enabled ? 'on' : ''}`}><i/></span></div>; }
+function Pool({ group, count }: { group: CandidateGroup; count: number }) { return <div className="pool"><span className={`category-icon ${group === 'CR' ? 'cr-icon' : 'gr-icon'}`}>{group}</span><div><strong>{group === 'CR' ? 'Class Representatives' : 'General Representatives'}</strong><small>{count} candidates selected</small></div><ChevronRight size={16}/></div>; }
+function ResultCard({ group, title, winner, votes, total }: { group: CandidateGroup; title: string; winner: string; votes: string; total: string }) { return <section className="result-card"><div className={`result-badge ${group === 'CR' ? 'cr' : 'gr'}`}>{group}</div><small>{title}</small><Trophy size={20}/><h3>{winner}</h3><div className="result-votes"><strong>{votes}</strong><span>votes · {Math.round(Number(votes) / Number(total) * 100)}%</span></div><div className="result-bar"><i style={{ width: `${Number(votes) / Number(total) * 100}%` }}/></div></section>; }
+function LockIcon() { return <LockIconSvg/>; }
+function LockIconSvg() { return <span className="lock-icon"><ShieldCheck size={15}/></span>; }
 
 export default App;
